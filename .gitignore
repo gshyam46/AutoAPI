@@ -1,0 +1,23 @@
+# Node.js
+node_modules/
+dist/
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Go
+bin/
+vendor/
+
+# Docker
+*.log
+docker-compose.override.yml
+
+# General
+*.DS_Store
+*.bak
+*.swp

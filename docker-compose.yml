@@ -1,0 +1,41 @@
+services:
+  api_server:
+    build:
+      context: ./backend/api_server
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/api_server:/app
+    networks:
+      - autoapi_network
+
+  mock_server:
+    build:
+      context: ./backend/mock_server
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/mock_server:/app
+    networks:
+      - autoapi_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_MOCK_SERVER_URL=http://localhost:8080
+    networks:
+      - autoapi_network
+
+networks:
+  autoapi_network:
+    driver: bridge
