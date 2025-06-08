@@ -1,3 +1,4 @@
+yaml
 services:
   api_server:
     build:
@@ -7,6 +8,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend/api_server:/app
+      - ./backend/api_server/uploads:/app/uploads
     networks:
       - autoapi_network
 
@@ -18,6 +20,9 @@ services:
       - "8080:8080"
     volumes:
       - ./backend/mock_server:/app
+    depends_on:
+      - api_server:
+        depends_on: api_server
     networks:
       - autoapi_network
 
@@ -26,13 +31,17 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "5173:5173"
+      - context"5173:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     environment:
       - VITE_API_URL=http://localhost:8000
       - VITE_MOCK_SERVER_URL=http://localhost:8080
+    depends_on:
+      - api_server
+      - depends_on:
+        - mock_server
     networks:
       - autoapi_network
 
