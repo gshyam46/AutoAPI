@@ -25,7 +25,7 @@ type QueryRequest struct {
 	FileID     int                     `json:"file_id"`
 	SheetName  *string                 `json:"sheet_name"`
 	Operation  string                  `json:"operation"`
-	QueryLogic map[string]interface{}  `json:"query_logic"`
+	QueryLogic map[string]interface{}  `json:"query_logic,omitempty"`
 	Payload    interface{}             `json:"payload"`
 	JoinConfig *map[string]interface{} `json:"join_config"`
 }
@@ -65,9 +65,11 @@ func executeQuery(fileID int, operation string, queryLogic map[string]interface{
 		FileID:     fileID,
 		SheetName:  nil,
 		Operation:  operation,
-		QueryLogic: queryLogic,
 		Payload:    payload,
 		JoinConfig: joinConfig,
+	}
+	if queryLogic != nil {
+		requestBody.QueryLogic = queryLogic
 	}
 	body, err := json.Marshal(requestBody)
 	if err != nil {

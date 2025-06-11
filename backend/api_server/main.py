@@ -120,21 +120,39 @@ class QueryRequest(BaseModel):
 def validate_data_types(df: pd.DataFrame, row: Dict) -> bool:
     """Validate that row values match DataFrame column data types."""
     for col, value in row.items():
-        if col not in df.columns:
-            return False
+        if col not in df.columns or col == 'row_id':
+            continue
         dtype = df[col].dtype
         try:
             if pd.api.types.is_numeric_dtype(dtype):
-                float(value)  # Ensure numeric
+                float(value)
             elif pd.api.types.is_datetime64_any_dtype(dtype):
-                pd.to_datetime(value)  # Ensure datetime
+                pd.to_datetime(value)
             elif pd.api.types.is_bool_dtype(dtype):
                 if not isinstance(value, bool):
                     raise ValueError
-            # String or object types are flexible
         except (ValueError, TypeError):
             return False
     return True
+
+
+def get_file_columns(file_id: int, sheet_name: str, session) -> List[str]:
+    """Get columns for a file and sheet."""
+    file = session.execute(files.select().where(
+        files.c.id == file_id)).fetchone()
+    if not file:
+        raise HTTPException(
+            status_code=404, detail=f"File {file_id} not found")
+    if file.filename.endswith('.csv'):
+        df = pd.read_csv(file.file_path)
+    elif file.filename.endswith('.json'):
+        df = pd.read_json(file.file_path)
+    else:
+        if sheet_name not in file.sheets:
+            raise HTTPException(
+                status_code=400, detail=f"Sheet {sheet_name} not found")
+        df = pd.read_excel(file.file_path, sheet_name=sheet_name)
+    return list(df.columns)
 
 
 @app.get("/health")
@@ -371,16 +389,47 @@ async def create_api_config(config: APIConfigCreate):
                 config.endpoint_path = "/" + config.endpoint_path
             if config.method.upper() not in ["GET", "POST", "PUT", "DELETE"]:
                 raise HTTPException(status_code=400, detail="Invalid method")
+
+            # Collect all valid columns for validation
+            valid_columns = set(file.selected_columns)
+            join_config = config.query_logic.get("join_config", {})
+            if join_config:
+                if join_config.get("files"):
+                    for fid in join_config["files"]:
+                        other_file = session.execute(
+                            files.select().where(files.c.id == fid)).fetchone()
+                        if not other_file:
+                            raise HTTPException(
+                                status_code=404, detail=f"File {fid} not found")
+                        valid_columns.update(other_file.selected_columns)
+                elif join_config.get("sheets"):
+                    for sheet in join_config["sheets"]:
+                        if sheet not in file.sheets:
+                            raise HTTPException(
+                                status_code=400, detail=f"Sheet {sheet} not found")
+                        df = pd.read_excel(file.file_path, sheet_name=sheet)
+                        valid_columns.update(df.columns)
+                if "on" in join_config and join_config["on"] not in valid_columns:
+                    raise HTTPException(
+                        status_code=400, detail=f"Join column {join_config['on']} not found")
+
+            # Validate filters and aggregates
             if "filters" in config.query_logic:
                 for f in config.query_logic["filters"]:
-                    if f["column"] not in file.selected_columns:
+                    if f["column"] not in valid_columns:
                         raise HTTPException(
                             status_code=400, detail=f"Invalid column {f['column']}")
             if "aggregates" in config.query_logic:
                 for agg in config.query_logic["aggregates"]:
-                    if agg["column"] not in file.selected_columns:
+                    if agg["column"] not in valid_columns:
                         raise HTTPException(
                             status_code=400, detail=f"Invalid column {agg['column']}")
+            if "group_by" in config.query_logic and config.query_logic["group_by"]:
+                for col in config.query_logic["group_by"]:
+                    if col not in valid_columns:
+                        raise HTTPException(
+                            status_code=400, detail=f"Invalid group_by column {col}")
+
             result = session.execute(
                 api_configs.insert().values(
                     file_id=config.file_id,
