@@ -2,7 +2,10 @@ module github.com/gshyam46/AutoAPI/backend/mock_server
 
 go 1.24.0
 
-require github.com/gin-gonic/gin v1.10.1
+require (
+	github.com/gin-gonic/gin v1.10.1
+	github.com/mattn/go-sqlite3 v1.14.22
+)
 
 require (
 	github.com/bytedance/sonic v1.13.3 // indirect
